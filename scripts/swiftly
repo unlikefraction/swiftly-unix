@@ -1,0 +1,73 @@
+#!/bin/bash
+
+function init(){
+    if [ -z "$1" ]
+    then
+        pull_changes=$(python -c 'from swiftly_unix.init import pull_changes; print(pull_changes())')
+        if [ "$pull_changes" = "True" ]
+        then
+            git pull
+        fi
+
+        venv_location=$(python -c 'from swiftly_unix.init import get_venv_location; print(get_venv_location())')
+        source $venv_location/bin/activate
+
+        available_packages=$(pip freeze | tr '\n' ' ')
+
+        new_packages=$(python -c "from swiftly_unix.init import check_new_packages; print(check_new_packages('$available_packages'))")
+
+        if [ "$new_packages" = "True" ]
+        then
+            pip install -r requirements.txt
+        fi
+
+        echo "Initialisation completed!"
+    else
+        is_github_repo=$(python -c "from swiftly_unix.init import is_repo; print(is_repo('$1'))")
+        if [ "$is_github_repo" = "True" ]
+        then
+            git clone $1
+        fi
+
+        venv_location=$(python -c "from swiftly_unix.init import initialise; print(initialise('$1'))")
+        source $venv_location/bin/activate
+        pip install -r requirements.txt
+        echo "Initialisation completed!"
+    fi
+}
+
+function makeapp(){
+    python -c "from swiftly_unix.makeapp import makeapp; makeapp('$1')"
+}
+
+function run(){
+    path=$(python -c "from swiftly_unix.run_app import run_app; print(run_app('$1'))")
+    python $path
+}
+
+function install(){
+    pip install $1
+    python -c "from swiftly_unix.installs import install_package; install_package('$1')"
+}
+
+function uninstall(){
+    pip uninstall $1
+    python -c "from swiftly_unix.installs import uninstall_package; uninstall_package('$1')"
+}
+
+if [ "$1" = "init" ]
+then
+    init $2
+elif [ "$1" = "makeapp" ]
+then
+    makeapp $2
+elif [ "$1" = "run" ]
+then
+    run $2
+elif [ "$1" = "install" ]
+then
+    install $2
+elif [ "$1" = "uninstall" ]
+then
+    uninstall $2
+fi
