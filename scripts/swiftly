@@ -1,19 +1,26 @@
 #!/bin/bash
 
 function init(){
+    pip install swiftly-unix --upgrade
+
     if [ -z "$1" ]
     then
-        pull_changes=$(python -c 'from swiftly_unix.init import pull_changes; print(pull_changes())')
+        fetch_remote=$(git fetch | tr '\n' ' ')
+        git_status=$(git status -uno | tr '\n' ' ' | sed 's/"/\\"/g')
+        pull_changes=$(python -c 'from swiftly_unix.init import pull_changes; print(pull_changes("'$git_status'"))')
         if [ "$pull_changes" = "True" ]
         then
             git pull
         fi
 
+        project_name=$(python -c 'from swiftly_unix.init import get_project_name; print(get_project_name())')
+        export PROJECT_NAME=$project_name
+
         venv_location=$(python -c 'from swiftly_unix.init import get_venv_location; print(get_venv_location())')
         source $venv_location/bin/activate
+        export PROJECT_VENV_LOCATION=$venv_location
 
         available_packages=$(pip freeze | tr '\n' ' ')
-
         new_packages=$(python -c "from swiftly_unix.init import check_new_packages; print(check_new_packages('$available_packages'))")
 
         if [ "$new_packages" = "True" ]
@@ -21,7 +28,9 @@ function init(){
             pip install -r requirements.txt
         fi
 
-        echo "Initialisation completed!"
+        pip install --upgrade pip
+        install swiftly-unix --upgrade
+
     else
         is_github_repo=$(python -c "from swiftly_unix.init import is_repo; print(is_repo('$1'))")
         if [ "$is_github_repo" = "True" ]
@@ -31,28 +40,42 @@ function init(){
 
         venv_location=$(python -c "from swiftly_unix.init import initialise; print(initialise('$1'))")
         source $venv_location/bin/activate
+        export PROJECT_VENV_LOCATION=$venv_location
+
+        pip install --upgrade pip
+        cd $venv_location
+        cd ..
         pip install -r requirements.txt
-        echo "Initialisation completed!"
+        install swiftly-unix --upgrade
+
+        project_name=$(python -c 'from swiftly_unix.init import get_project_name; print(get_project_name())')
+        export PROJECT_NAME=$project_name
     fi
+
+    echo "Initialisation completed!"
 }
 
 function makeapp(){
-    python -c "from swiftly_unix.makeapp import makeapp; makeapp('$1')"
+    python -c "from swiftly_unix.makeapp import makeapp; makeapp('$1', '$PROJECT_VENV_LOCATION')"
 }
 
 function run(){
-    path=$(python -c "from swiftly_unix.run_app import run_app; print(run_app('$1'))")
-    python $path
+    path=$(python -c "from swiftly_unix.runapp import run_app; print(run_app('$1', '$PROJECT_NAME'))")
+    python -m $path
 }
 
 function install(){
-    pip install $1
-    python -c "from swiftly_unix.installs import install_package; install_package('$1')"
+    pip install "$@"
+    updated_packages=$(pip freeze)
+    requirements_path=$PROJECT_VENV_LOCATION/../requirements.txt
+    echo "$updated_packages" > $requirements_path
 }
 
 function uninstall(){
-    pip uninstall $1
-    python -c "from swiftly_unix.installs import uninstall_package; uninstall_package('$1')"
+    pip uninstall "$@"
+    updated_packages=$(pip freeze)
+    requirements_path=$PROJECT_VENV_LOCATION/../requirements.txt
+    echo "$updated_packages" > $requirements_path
 }
 
 if [ "$1" = "init" ]
