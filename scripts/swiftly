@@ -100,7 +100,7 @@ function init(){
         if [ "$pull_changes" = "True" ]
         then
             git pull > /dev/null
-            spin_stop "Pulled remote changes"
+            spin_stop "Remote changes pulled"
 
         else
             spin_stop "Codebase up-to-date"
@@ -117,7 +117,7 @@ function init(){
         export PROJECT_VENV_LOCATION=$venv_location
 
         pip install swiftly-unix --upgrade > /dev/null 2>&1
-        spin_stop "Activated virtual environment"
+        spin_stop "Virtual environment activated"
 
         spin_start "Checking for new packages"
         available_packages=$(pip freeze | tr '\n' ' ')
@@ -126,7 +126,7 @@ function init(){
         if [ "$new_packages" = "True" ]
         then
             pip install -r requirements.txt > /dev/null
-            spin_stop "Installed new packages"
+            spin_stop "New packages installed"
         else
             spin_stop "All packages already installed"
         fi
@@ -135,7 +135,7 @@ function init(){
         pip install --upgrade pip > /dev/null 2>&1
 
         install swiftly-unix --upgrade > /dev/null 2>&1
-        spin_stop "All checks swiftly completed"
+        spin_stop "All checks completed swiftly"
 
     else
         is_github_repo=$(python -c "from swiftly_unix.init import is_repo; print(is_repo('$1'))")
@@ -148,7 +148,7 @@ function init(){
 
             if [ "$clone_successful" = "True" ]
             then
-                spin_stop "Cloned git repository"
+                spin_stop "Git repository cloned"
             else
                 spin_stop "$clone_successful" "fail"
                 echo "Do you want to create a new project? (y/n)"
@@ -181,11 +181,11 @@ function init(){
         pip install --upgrade pip > /dev/null 2>&1
 
         pip install -r requirements.txt > /dev/null
-        spin_stop "Installed requirements"
+        spin_stop "Requirements installed"
 
         spin_start "Checking swiftly"
         install swiftly-unix --upgrade > /dev/null 2>&1
-        spin_stop "All checks swiftly completed"
+        spin_stop "All checks completed swiftly"
     fi
 
     echo "✨ Project '$PROJECT_NAME' initiated successfully :)"
@@ -195,7 +195,7 @@ function init(){
 function makeapp(){
     python -c "from swiftly_unix.makeapp import makeapp; makeapp('$1', '$PROJECT_VENV_LOCATION')"
     sleep 1
-    printf "\033[0;32m✓\033[0m %s\n" "App ${1} created successfully"
+    printf "\033[0;32m✓\033[0m %s\n" "App '${1}' created successfully"
 }
 
 function run(){
