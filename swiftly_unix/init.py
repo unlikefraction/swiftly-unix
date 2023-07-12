@@ -61,6 +61,14 @@ def is_repo(name):
     repo_check = [marker in name for marker in repo_markers]
     return True in repo_check
 
+def clone_successful(git_clone):
+    if "ERROR:" in git_clone or "fatal:" in git_clone:
+        lines = git_clone.split('=')
+        error_lines = [line for line in lines if line.startswith(("ERROR:", "fatal:"))]
+        return ' '.join(error_lines)
+    else:
+        return True
+
 def initialise(name, in_place=False):
     if is_repo(name):
         name = name.split('/')[-1].replace('.git', '')

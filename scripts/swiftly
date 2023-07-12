@@ -1,62 +1,201 @@
 #!/bin/bash
 
+# Disable job control
+set +m
+
+# Define the spinner characters
+spinner_chars=('🌑' '🌒' '🌓' '🌔' '🌕' '🌖' '🌗' '🌘')
+
+# Define the spinner function
+spin() {
+    local -r msg="$1"
+    local spin_i=0
+
+    # While the process is still running...
+    while kill -0 "${SPIN_PID}" 2>/dev/null; do
+        # Clear the previous character
+        printf "\b\b\b"
+
+        # ...write the next spinner character and the message
+        printf "%s %s" "${spinner_chars[spin_i]}" "${msg}"
+
+        # Sleep for a shorter while
+        sleep 0.2
+
+        # And move to the next character
+        spin_i=$(( (spin_i + 1) % ${#spinner_chars[@]} ))
+
+        # Clear the previous character and message
+        printf "\r"
+    done
+}
+
+# Define the start spinner function
+spin_start() {
+    local -r msg="$1"
+    (sleep 100) & SPIN_PID=$!
+    spin "${msg}" "${SPIN_PID}" &
+    SPIN_JOB=$!
+}
+
+# Define the stop spinner function
+spin_stop() {
+    local msg="$1"
+    local operation_status="${2:-success}"
+
+    # Only try to kill the process if it's still running
+    if kill -0 "${SPIN_JOB}" 2>/dev/null; then
+        kill -9 "${SPIN_JOB}" > /dev/null 2>&1
+    fi
+
+    # Clear the final spinner character and message
+    printf " \r"
+
+    # Clear the line
+    tput el
+
+    # Print a green check mark or a red cross and the message, depending on the operation_status
+    if [ "$operation_status" = "fail" ]; then
+        printf "\033[0;31m✗\033[0m %s\n" "${msg}"
+    else
+        printf "\033[0;32m✓\033[0m %s\n" "${msg}"
+    fi
+}
+
+
+# Define a function to handle the SIGINT signal
+handle_sigint() {
+    # Stop the spinner
+    spin_stop "Interrupted" "fail"
+
+    # If the script is being sourced, return from the script
+    # Otherwise, exit the script
+    if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+        return 1
+    else
+        exit 1
+    fi
+}
+
+
+# Trap the SIGINT signal
+trap handle_sigint SIGINT
+
+
+# Now, you can use spin_start and spin_stop in your functions
+
 function init(){
-    pip install swiftly-unix --upgrade
+    spin_start "Checking swiftly"
+    pip install swiftly-unix --upgrade > /dev/null
+    spin_stop "Checked swiftly"
 
     if [ -z "$1" ]
     then
-        fetch_remote=$(git fetch | tr '\n' ' ')
+        spin_start "Checking remote origin for changes"
+        fetch_remote=$(git fetch | tr '\n' ' ' > /dev/null 2>&1)
+
         git_status=$(git status -uno | tr '\n' ' ' | sed 's/"/\\"/g')
+
         pull_changes=$(python -c 'from swiftly_unix.init import pull_changes; print(pull_changes("'$git_status'"))')
         if [ "$pull_changes" = "True" ]
         then
-            git pull
+            git pull > /dev/null
+            spin_stop "Pulled remote changes"
+
+        else
+            spin_stop "Codebase up-to-date"
         fi
 
+        spin_start "Checking your project"
         project_name=$(python -c 'from swiftly_unix.init import get_project_name; print(get_project_name())')
         export PROJECT_NAME=$project_name
+        spin_stop "Project '$PROJECT_NAME' ready"
 
+        spin_start "Activating virtual environment"
         venv_location=$(python -c 'from swiftly_unix.init import get_venv_location; print(get_venv_location())')
         source $venv_location/bin/activate
         export PROJECT_VENV_LOCATION=$venv_location
 
+        pip install swiftly-unix --upgrade > /dev/null 2>&1
+        spin_stop "Activated virtual environment"
+
+        spin_start "Checking for new packages"
         available_packages=$(pip freeze | tr '\n' ' ')
         new_packages=$(python -c "from swiftly_unix.init import check_new_packages; print(check_new_packages('$available_packages'))")
 
         if [ "$new_packages" = "True" ]
         then
-            pip install -r requirements.txt
+            pip install -r requirements.txt > /dev/null
+            spin_stop "Installed new packages"
+        else
+            spin_stop "All packages already installed"
         fi
 
-        pip install --upgrade pip
-        install swiftly-unix --upgrade
+        spin_start "Checking swiftly"
+        pip install --upgrade pip > /dev/null 2>&1
+
+        install swiftly-unix --upgrade > /dev/null 2>&1
+        spin_stop "All checks swiftly completed"
 
     else
         is_github_repo=$(python -c "from swiftly_unix.init import is_repo; print(is_repo('$1'))")
         if [ "$is_github_repo" = "True" ]
         then
-            git clone $1
+            spin_start "Cloning git repository"
+            git_clone=$(git clone $1 2>&1 | tr '\n' '=' | sed 's/"/\\"/g')
+
+            clone_successful=$(python -c 'from swiftly_unix.init import clone_successful; print(clone_successful("'$git_clone'"))')
+
+            if [ "$clone_successful" = "True" ]
+            then
+                spin_stop "Cloned git repository"
+            else
+                spin_stop "$clone_successful" "fail"
+                echo "Do you want to create a new project? (y/n)"
+                read user_input
+                user_input=$(echo "$user_input" | tr '[:upper:]' '[:lower:]' | cut -c 1)
+                if [ "$user_input" != "y" ]
+                then
+                    return 1
+                fi
+            fi
         fi
 
+
+        spin_start "Creating project $1"
         venv_location=$(python -c "from swiftly_unix.init import initialise; print(initialise('$1'))")
         source $venv_location/bin/activate
         export PROJECT_VENV_LOCATION=$venv_location
 
-        pip install --upgrade pip
         cd $venv_location
         cd ..
-        pip install -r requirements.txt
-        install swiftly-unix --upgrade
+
+        pip install swiftly-unix --upgrade > /dev/null 2>&1
 
         project_name=$(python -c 'from swiftly_unix.init import get_project_name; print(get_project_name())')
         export PROJECT_NAME=$project_name
+
+        spin_stop "Project '$PROJECT_NAME' ready"
+
+        spin_start "Installing requirements"
+        pip install --upgrade pip > /dev/null 2>&1
+
+        pip install -r requirements.txt > /dev/null
+        spin_stop "Installed requirements"
+
+        spin_start "Checking swiftly"
+        install swiftly-unix --upgrade > /dev/null 2>&1
+        spin_stop "All checks swiftly completed"
     fi
 
-    echo "Initialisation completed!"
+    echo "✨ Project '$PROJECT_NAME' initiated successfully :)"
 }
+
 
 function makeapp(){
     python -c "from swiftly_unix.makeapp import makeapp; makeapp('$1', '$PROJECT_VENV_LOCATION')"
+    sleep 1
+    printf "\033[0;32m✓\033[0m %s\n" "App ${1} created successfully"
 }
 
 function run(){
@@ -78,6 +217,12 @@ function uninstall(){
     echo "$updated_packages" > $requirements_path
 }
 
+function push(){
+    git add *
+    git commit -m "$*"
+    git push
+}
+
 if [ "$1" = "init" ]
 then
     init $2
@@ -93,4 +238,7 @@ then
 elif [ "$1" = "uninstall" ]
 then
     uninstall $2
+elif [ "$1" = "push" ]
+then
+    push $2
 fi
